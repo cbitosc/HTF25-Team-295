@@ -1,17 +1,29 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 
 const SocketContext = createContext();
 export const useSocket = () => useContext(SocketContext);
 
-export const SocketProvider = ({ children }) => {
+export const SocketProvider = ({ room, children }) => {
   const [socket, setSocket] = useState(null);
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    const s = io("http://localhost:8000"); // backend websocket URL
-    setSocket(s);
-    return () => s.disconnect();
-  }, []);
+    if (!room) return;
 
-  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
+    const ws = new WebSocket(`ws://localhost:8000/chat/ws/${room}`);
+    ws.onopen = () => console.log("✅ Connected to WebSocket room:", room);
+    ws.onclose = () => console.log("❌ Disconnected from WebSocket");
+    setSocket(ws);
+    socketRef.current = ws;
+
+    return () => {
+      ws.close();
+    };
+  }, [room]);
+
+  return (
+    <SocketContext.Provider value={socket}>
+      {children}
+    </SocketContext.Provider>
+  );
 };
