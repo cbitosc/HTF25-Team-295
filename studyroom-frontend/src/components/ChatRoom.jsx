@@ -1,8 +1,29 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FiSend, FiPaperclip, FiMoreVertical, FiUsers, FiWifi, FiWifiOff } from "react-icons/fi";
+import { FiSend, FiPaperclip, FiMoreVertical, FiUsers, FiWifi, FiWifiOff, FiTrash2 } from "react-icons/fi";
 import { BsEmojiSmile } from "react-icons/bs";
 import Picker from "emoji-picker-react";
 import axios from "axios";
+
+// Component to highlight @mentions
+function MessageWithMentions({ text, mentions, currentUser }) {
+  if (!text || !mentions) return <p className="text-sm whitespace-pre-wrap">{text}</p>;
+  
+  const parts = text.split(/(@\w+)/g);
+  return (
+    <p className="text-sm whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (part.startsWith('@') && mentions.includes(part.substring(1))) {
+          return (
+            <span key={i} className="font-semibold text-yellow-400">
+              {part}
+            </span>
+          );
+        }
+        return part;
+      })}
+    </p>
+  );
+}
 
 export default function ChatRoom({ username, room }) {
   const [socket, setSocket] = useState(null);
@@ -15,8 +36,31 @@ export default function ChatRoom({ username, room }) {
   const [isTyping, setIsTyping] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [showOnlineUsers, setShowOnlineUsers] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showDeleteIcon, setShowDeleteIcon] = useState(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  
+  // Debug: Log admin status changes
+  useEffect(() => {
+    console.log("🔑 Admin status changed to:", isAdmin);
+  }, [isAdmin]);
+
+  // Fetch chat history on mount
+  useEffect(() => {
+    fetchChatHistory();
+  }, [room]);
+
+  const fetchChatHistory = async () => {
+    try {
+      const res = await axios.get(`http://localhost:8000/chat/history/${room}`);
+      if (res.data.messages && res.data.messages.length > 0) {
+        setMessages(res.data.messages);
+      }
+    } catch (err) {
+      console.error("Failed to fetch chat history:", err);
+    }
+  };
 
   // connect to backend websocket
   useEffect(() => {
@@ -62,6 +106,20 @@ export default function ChatRoom({ username, room }) {
           if (data.online_users) {
             setOnlineUsers(data.online_users);
           }
+        } else if (data.type === "history") {
+          // Load chat history
+          if (data.messages && data.messages.length > 0) {
+            setMessages(data.messages);
+          }
+        } else if (data.type === "admin_status") {
+          // User is admin
+          console.log("🎉 Admin status received:", data.is_admin);
+          setIsAdmin(data.is_admin);
+        } else if (data.type === "message_deleted") {
+          // Remove deleted message from UI
+          setMessages(prev => prev.filter(m => m.id !== data.message_id));
+        } else if (data.type === "error") {
+          alert(data.message);
         } else {
           setMessages((prev) => [...prev, data]);
         }
@@ -163,14 +221,20 @@ export default function ChatRoom({ username, room }) {
       });
       const fileUrl = res.data.file_url;
 
+      // Send file information through WebSocket
       const msg = JSON.stringify({
         username,
-        message: `📎 Shared: ${file.name} (${fileUrl})`,
+        message: `📎 Shared: ${file.name}`,
+        file_url: fileUrl,
+        filename: file.name,
+        file_type: file.type,
+        file_size: file.size,
       });
       socket.send(msg);
       setFile(null);
     } catch (err) {
       console.error("File upload failed:", err);
+      alert("File upload failed. Please try again.");
     }
   };
 
@@ -178,6 +242,45 @@ export default function ChatRoom({ username, room }) {
     if (!timestamp) return "";
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const deleteMessage = (messageId) => {
+    console.log("Delete message clicked, ID:", messageId, "Socket:", socket, "IsAdmin:", isAdmin);
+    if (socket && messageId) {
+      socket.send(JSON.stringify({
+        type: "delete_message",
+        username: username,
+        message_id: messageId
+      }));
+      // Remove message from UI
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+    } else {
+      console.log("Cannot delete - missing socket or messageId");
+    }
+  };
+
+  const handleMessageDeleted = (messageId) => {
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+  };
+
+  const muteUser = (targetUsername) => {
+    if (socket && isAdmin) {
+      socket.send(JSON.stringify({
+        type: "mute_user",
+        username: username,
+        target_username: targetUsername
+      }));
+    }
+  };
+
+  const unmuteUser = (targetUsername) => {
+    if (socket && isAdmin) {
+      socket.send(JSON.stringify({
+        type: "unmute_user",
+        username: username,
+        target_username: targetUsername
+      }));
+    }
   };
 
   return (
@@ -230,6 +333,24 @@ export default function ChatRoom({ username, room }) {
                 <div key={i} className="flex items-center bg-gray-700 px-2 py-1 rounded-full text-xs">
                   <div className="w-2 h-2 bg-green-400 rounded-full mr-1"></div>
                   {user}
+                  {isAdmin && user !== username && (
+                    <>
+                      <button 
+                        onClick={() => muteUser(user)}
+                        className="ml-2 text-red-400 hover:text-red-300"
+                        title="Mute user"
+                      >
+                        🔇
+                      </button>
+                      <button 
+                        onClick={() => unmuteUser(user)}
+                        className="ml-1 text-green-400 hover:text-green-300"
+                        title="Unmute user"
+                      >
+                        🔊
+                      </button>
+                    </>
+                  )}
                 </div>
               ))
             ) : (
@@ -250,7 +371,10 @@ export default function ChatRoom({ username, room }) {
         )}
 
         {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.username === username ? "justify-end" : "justify-start"}`}>
+          <div 
+            key={m.id || i} 
+            className={`flex ${m.username === username ? "justify-end" : "justify-start"} relative group`}
+          >
             <div className={`max-w-[85%] sm:max-w-[70%] ${m.username === username ? "flex flex-col items-end" : "flex flex-col items-start"}`}>
               {m.username && m.username !== username && (
                 <div className="flex items-center mb-1">
@@ -262,42 +386,83 @@ export default function ChatRoom({ username, room }) {
               )}
               
               <div
-                className={`px-4 py-2 rounded-2xl shadow-lg ${
+                className={`px-4 py-2 rounded-2xl shadow-lg relative ${
                   m.username === username
                     ? "bg-blue-600 text-white rounded-br-none"
                     : "bg-gray-800 text-gray-100 rounded-bl-none"
                 }`}
+                onMouseEnter={() => {
+                  if (isAdmin && m.type !== "system") {
+                    setShowDeleteIcon(m.id || m.message_id || i);
+                  }
+                }}
+                onMouseLeave={() => setShowDeleteIcon(null)}
               >
+                {/* Delete button for admins - show on hover */}
+                {isAdmin && m.type !== "system" && showDeleteIcon === (m.id || m.message_id || i) && (m.id || m.message_id) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      console.log("Deleting message with ID:", m.id || m.message_id);
+                      deleteMessage(m.id || m.message_id);
+                    }}
+                    className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 cursor-pointer shadow-lg"
+                    title="Delete message"
+                    style={{ zIndex: 9999 }}
+                  >
+                    <FiTrash2 size={12} />
+                  </button>
+                )}
                 {m.type === "system" ? (
                   <div className="text-center">
                     <p className="text-sm italic text-gray-400">{m.message}</p>
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm whitespace-pre-wrap">{m.message}</p>
+                    {/* Highlight mentions */}
+                    <MessageWithMentions text={m.message} mentions={m.mentions} currentUser={username} />
                     <p className="text-xs opacity-70 mt-1">
                       {formatTime(m.timestamp)}
+                      {m.mentions && m.mentions.includes(username) && (
+                        <span className="ml-2 text-yellow-400">🔔 You were mentioned</span>
+                      )}
                     </p>
                   </div>
                 )}
 
-                {/* Handle embedded file links */}
-                {m.message && m.message.includes("http://localhost:8000") && (
+                {/* Handle file attachments */}
+                {m.file_url && (
                   <div className="mt-2">
-                    {m.message.match(/\.(jpg|jpeg|png|gif)$/i) ? (
+                    {/* Image files */}
+                    {m.file_type && m.file_type.startsWith('image/') ? (
                       <img
-                        src={m.message.match(/http:\/\/localhost:8000\S+/)[0]}
-                        alt="shared"
-                        className="max-w-[200px] sm:max-w-[250px] rounded-lg border border-gray-700"
+                        src={m.file_url}
+                        alt={m.filename || 'shared'}
+                        className="max-w-[200px] sm:max-w-[250px] rounded-lg border border-gray-700 cursor-pointer"
+                        onClick={() => window.open(m.file_url, '_blank')}
+                      />
+                    ) : m.file_url && m.file_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                      <img
+                        src={m.file_url}
+                        alt={m.filename || 'shared'}
+                        className="max-w-[200px] sm:max-w-[250px] rounded-lg border border-gray-700 cursor-pointer"
+                        onClick={() => window.open(m.file_url, '_blank')}
                       />
                     ) : (
                       <a
-                        href={m.message.match(/http:\/\/localhost:8000\S+/)[0]}
+                        href={m.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-400 underline text-sm hover:text-blue-300"
+                        className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm underline"
                       >
-                        📎 View File
+                        <span>📎</span>
+                        <span>{m.filename || 'Download File'}</span>
+                        {m.file_size && (
+                          <span className="text-xs text-gray-400">
+                            ({(m.file_size / 1024).toFixed(1)} KB)
+                          </span>
+                        )}
                       </a>
                     )}
                   </div>
