@@ -1,0 +1,22 @@
+# FastAPI and web framework dependencies
+fastapi==0.120.0
+uvicorn==0.38.0
+python-multipart==0.0.20
+
+# Database dependencies
+sqlalchemy==2.0.44
+
+# Authentication dependencies
+passlib==1.7.4
+python-jose==3.5.0
+bcrypt==5.0.0
+
+# AI/OpenAI dependencies
+openai==1.58.1
+
+# WebSocket dependencies
+websockets==15.0.1
+
+# Other utilities
+python-dotenv==1.1.1
+requests==2.32.5

@@ -185,7 +185,7 @@ export default function ChatRoom({ username, room }) {
     }, 2000); // 2 seconds after stopping typing
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!socket || !message.trim()) return;
     
     // Clear typing indicator immediately when sending
@@ -201,8 +201,93 @@ export default function ChatRoom({ username, room }) {
       clearTimeout(typingTimeoutRef.current);
     }
     
-    const msg = JSON.stringify({ username, message });
-    socket.send(msg);
+    // Check if message starts with @bot for AI assistance
+    if (message.trim().toLowerCase().startsWith('@bot')) {
+      try {
+        // Extract the question part (remove @bot prefix)
+        const question = message.trim().substring(4).trim();
+        
+        if (!question) {
+          // If no question after @bot, show usage hint
+          const hintMessage = {
+            type: "chat",
+            username: "AI Assistant",
+            message: "Hi! I'm your AI Study Assistant. Ask me anything academic like:\n• @bot explain photosynthesis\n• @bot summarize this discussion\n• @bot help with calculus",
+            timestamp: new Date().toISOString(),
+            isAI: true
+          };
+          setMessages(prev => [...prev, hintMessage]);
+          setMessage("");
+          return;
+        }
+        
+        // Show AI is thinking message
+        const thinkingMessage = {
+          type: "chat",
+          username: "AI Assistant",
+          message: "🤔 Thinking...",
+          timestamp: new Date().toISOString(),
+          isAI: true,
+          isThinking: true
+        };
+        setMessages(prev => [...prev, thinkingMessage]);
+        
+        // Call AI helper API
+        const response = await fetch('http://localhost:8000/ai/helper', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: question })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Remove thinking message and add AI response
+          setMessages(prev => {
+            const filtered = prev.filter(m => !m.isThinking);
+            return [...filtered, {
+              type: "chat",
+              username: "AI Assistant",
+              message: data.reply,
+              timestamp: new Date().toISOString(),
+              isAI: true
+            }];
+          });
+        } else {
+          // Handle API error
+          setMessages(prev => {
+            const filtered = prev.filter(m => !m.isThinking);
+            return [...filtered, {
+              type: "chat",
+              username: "AI Assistant",
+              message: "Sorry, I'm having trouble right now. Please try again later.",
+              timestamp: new Date().toISOString(),
+              isAI: true
+            }];
+          });
+        }
+      } catch (error) {
+        console.error('AI Helper Error:', error);
+        // Remove thinking message and show error
+        setMessages(prev => {
+          const filtered = prev.filter(m => !m.isThinking);
+          return [...filtered, {
+            type: "chat",
+            username: "AI Assistant",
+            message: "Sorry, I'm having trouble right now. Please try again later.",
+            timestamp: new Date().toISOString(),
+            isAI: true
+          }];
+        });
+      }
+    } else {
+      // Regular chat message - send through WebSocket
+      const msg = JSON.stringify({ username, message });
+      socket.send(msg);
+    }
+    
     setMessage("");
   };
 
@@ -378,8 +463,12 @@ export default function ChatRoom({ username, room }) {
             <div className={`max-w-[85%] sm:max-w-[70%] ${m.username === username ? "flex flex-col items-end" : "flex flex-col items-start"}`}>
               {m.username && m.username !== username && (
                 <div className="flex items-center mb-1">
-                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-xs font-bold mr-2">
-                    {m.username.charAt(0).toUpperCase()}
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 ${
+                    m.isAI 
+                      ? "bg-gradient-to-r from-purple-500 to-blue-500" 
+                      : "bg-blue-500"
+                  }`}>
+                    {m.isAI ? "🤖" : m.username.charAt(0).toUpperCase()}
                   </div>
                   <span className="text-xs text-gray-400">{m.username}</span>
                 </div>
@@ -387,7 +476,9 @@ export default function ChatRoom({ username, room }) {
               
               <div
                 className={`px-4 py-2 rounded-2xl shadow-lg relative ${
-                  m.username === username
+                  m.isAI
+                    ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-bl-none"
+                    : m.username === username
                     ? "bg-blue-600 text-white rounded-br-none"
                     : "bg-gray-800 text-gray-100 rounded-bl-none"
                 }`}
@@ -515,7 +606,7 @@ export default function ChatRoom({ username, room }) {
               onChange={handleTyping}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               className="w-full bg-gray-800 text-white px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700"
-              placeholder="Type your message..."
+              placeholder="Type your message... (use @bot for AI help)"
             />
           </div>
 

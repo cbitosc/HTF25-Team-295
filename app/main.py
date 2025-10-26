@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.auth import router as auth_router  # Add "app."
 from app.chat import router as chat_router  # Add "app."
+from app.ai_helper import router as ai_router  # Add AI helper router
 import os
 import shutil
 import uuid
@@ -30,6 +31,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(ai_router)  # Include AI helper router
 
 @app.get("/")
 def root():
