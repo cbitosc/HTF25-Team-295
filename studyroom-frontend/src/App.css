@@ -1,43 +1,167 @@
 @import "tailwindcss";
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+
+/* App-specific styles */
+.app-container {
+  @apply min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Chat container */
+.chat-container {
+  @apply flex flex-col h-screen bg-gray-950;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .chat-container {
+    @apply h-screen;
   }
-  to {
-    transform: rotate(360deg);
+  
+  .message-input {
+    @apply px-3 py-2 text-sm;
+  }
+  
+  .sidebar-mobile {
+    @apply fixed inset-0 z-50 bg-gray-900;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .chat-container {
+    @apply h-screen;
   }
 }
 
-.card {
-  padding: 2em;
+/* Desktop optimizations */
+@media (min-width: 1024px) {
+  .chat-container {
+    @apply h-screen;
+  }
 }
 
-.read-the-docs {
-  color: #888;
+/* Loading states */
+.loading-skeleton {
+  @apply animate-pulse bg-gray-700 rounded;
+}
+
+/* Message animations */
+.message-enter {
+  @apply opacity-0 transform translate-y-2;
+}
+
+.message-enter-active {
+  @apply opacity-100 transform translate-y-0 transition-all duration-300;
+}
+
+/* Notification styles */
+.notification {
+  @apply fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50;
+}
+
+/* Connection status */
+.connection-status {
+  @apply flex items-center space-x-2 text-sm;
+}
+
+.connection-online {
+  @apply text-green-400;
+}
+
+.connection-offline {
+  @apply text-red-400;
+}
+
+/* File upload styles */
+.file-upload-area {
+  @apply border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-blue-500 transition-colors;
+}
+
+.file-upload-area.dragover {
+  @apply border-blue-500 bg-blue-50;
+}
+
+/* Emoji picker container */
+.emoji-picker-container {
+  @apply absolute bottom-full left-0 right-0 mb-2 z-10;
+}
+
+/* User avatar styles */
+.user-avatar {
+  @apply w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold;
+}
+
+.user-avatar.primary {
+  @apply bg-blue-500 text-white;
+}
+
+.user-avatar.secondary {
+  @apply bg-gray-600 text-white;
+}
+
+/* Room list styles */
+.room-item {
+  @apply flex items-center p-3 rounded-lg cursor-pointer transition-all hover:bg-gray-800;
+}
+
+.room-item.active {
+  @apply bg-blue-600 text-white;
+}
+
+.room-item:hover:not(.active) {
+  @apply bg-gray-800;
+}
+
+/* Online indicator */
+.online-indicator {
+  @apply w-2 h-2 bg-green-400 rounded-full;
+}
+
+.offline-indicator {
+  @apply w-2 h-2 bg-gray-500 rounded-full;
+}
+
+/* Typing indicator animation */
+.typing-bounce {
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* Message timestamp */
+.message-timestamp {
+  @apply text-xs text-gray-500 mt-1;
+}
+
+/* System message styles */
+.system-message {
+  @apply text-center text-gray-400 italic text-sm py-2;
+}
+
+/* File message styles */
+.file-message {
+  @apply bg-gray-800 p-3 rounded-lg border border-gray-700;
+}
+
+.file-message img {
+  @apply max-w-full h-auto rounded;
+}
+
+/* Responsive text sizes */
+@media (max-width: 640px) {
+  .text-responsive {
+    @apply text-sm;
+  }
+}
+
+@media (min-width: 641px) {
+  .text-responsive {
+    @apply text-base;
+  }
 }
